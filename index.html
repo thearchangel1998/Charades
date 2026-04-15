@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Charades Class App</title>
+    <title>Charades Class App (Sheets Version)</title>
     <style>
         body {
             margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -12,13 +12,12 @@
         .screen { display: none; width: 100vw; height: 100vh; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; }
         .active { display: flex; }
         h1 { font-size: 2.5rem; margin-bottom: 10px; }
-        textarea { width: 90%; max-width: 400px; height: 150px; padding: 10px; border-radius: 8px; font-size: 1rem; margin-bottom: 20px; }
+        textarea { width: 90%; max-width: 400px; height: 200px; padding: 10px; border-radius: 8px; font-size: 1rem; margin-bottom: 20px; border: 2px solid #3498db; }
         button { background-color: #3498db; color: white; border: none; padding: 15px 30px; font-size: 1.2rem; border-radius: 8px; cursor: pointer; margin: 10px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
         button:active { transform: translateY(2px); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
         
-        /* Play Screen Specifics */
         #play-screen { transition: background-color 0.3s; }
-        #word-display { font-size: 4rem; font-weight: bold; margin: 40px 0; }
+        #word-display { font-size: 4rem; font-weight: bold; margin: 40px 0; padding: 0 10px; }
         #timer { font-size: 2rem; position: absolute; top: 20px; right: 20px; font-weight: bold; }
         #team-indicator { position: absolute; top: 20px; left: 20px; font-size: 1.2rem; opacity: 0.8; }
         .controls { display: flex; gap: 20px; position: absolute; bottom: 40px; }
@@ -30,35 +29,35 @@
 
     <div id="setup-screen" class="screen active">
         <h1>Charades Setup</h1>
-        <p>Giáo viên nhập từ vựng (cách nhau bằng dấu phẩy):</p>
-        <textarea id="word-input" placeholder="Ví dụ: con chó, quả táo, máy tính, bơi lội, ca sĩ..."></textarea>
-        <p>Thời gian mỗi vòng (giây):</p>
-        <input type="number" id="time-input" value="60" style="padding:10px; font-size:1.2rem; width:80px; text-align:center; border-radius:8px; margin-bottom:20px;">
+        <p>Dán cột từ vựng từ Sheets (mỗi từ một dòng):</p>
+        <textarea id="word-input" placeholder="Từ vựng 1&#10;Từ vựng 2&#10;Từ vựng 3..."></textarea>
+        <p>Thời gian (giây): 
+            <input type="number" id="time-input" value="60" style="padding:10px; font-size:1.2rem; width:80px; text-align:center; border-radius:8px;">
+        </p>
         <button onclick="initGame()">Bắt Đầu Phân Đội</button>
     </div>
 
     <div id="ready-screen" class="screen">
         <h1 id="ready-team-name">Đội 1 Chuẩn Bị!</h1>
-        <p>Cầm điện thoại dọc. Lắc phải = Đúng | Lắc trái = Bỏ qua</p>
+        <p>Nghiêng Phải = Đúng | Nghiêng Trái = Skip</p>
         <button onclick="startRound()">Sẵn Sàng Chơi</button>
     </div>
 
     <div id="play-screen" class="screen">
         <div id="team-indicator">Đội 1</div>
         <div id="timer">60</div>
-        <div id="word-display">Từ Vựng</div>
-        
+        <div id="word-display">Đang tải...</div>
         <div class="controls">
-            <button class="btn-skip" onclick="handleAction('skip')">👈 Lắc Trái (Skip)</button>
-            <button class="btn-correct" onclick="handleAction('correct')">Lắc Phải (Đúng) 👉</button>
+            <button class="btn-skip" onclick="handleAction('skip')">Skip (Trái)</button>
+            <button class="btn-correct" onclick="handleAction('correct')">Đúng (Phải)</button>
         </div>
     </div>
 
     <div id="result-screen" class="screen">
         <h1 id="result-title">Hết Giờ!</h1>
-        <h2 id="result-score">Điểm Đội 1: 0</h2>
+        <h2 id="result-score"></h2>
         <button id="next-round-btn" onclick="prepareTeam2()">Đội 2 Sẵn Sàng</button>
-        <button id="restart-btn" onclick="location.reload()" style="display:none;">Chơi Lại Từ Đầu</button>
+        <button id="restart-btn" onclick="location.reload()" style="display:none;">Chơi Lại</button>
     </div>
 
     <script>
@@ -68,89 +67,71 @@
         let currentTeam = 1;
         let scores = { 1: 0, 2: 0 };
         let timeLeft = 60;
-        let totalTime = 60;
         let timerInterval;
         let isPlaying = false;
         let actionCooldown = false;
 
-        // 1. Khởi tạo trò chơi và chia đội
         function initGame() {
             const rawText = document.getElementById('word-input').value;
-            totalTime = parseInt(document.getElementById('time-input').value) || 60;
+            const totalTimeInput = parseInt(document.getElementById('time-input').value) || 60;
             
-            // Xử lý chuỗi input, loại bỏ khoảng trắng dư thừa
-            let words = rawText.split(',').map(w => w.trim()).filter(w => w.length > 0);
+            // Tách theo dòng mới (\n), dọn dẹp khoảng trắng, và loại bỏ từ trùng lặp (Set)
+            let words = Array.from(new Set(rawText.split(/\r?\n/).map(w => w.trim()))).filter(w => w.length > 0);
             
             if (words.length < 2) {
-                alert("Vui lòng nhập ít nhất 2 từ vựng!");
+                alert("Vui lòng nhập ít nhất 2 từ vựng từ danh sách!");
                 return;
             }
 
-            // Trộn ngẫu nhiên mảng từ vựng (Fisher-Yates shuffle)
+            // Trộn ngẫu nhiên
             for (let i = words.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [words[i], words[j]] = [words[j], words[i]];
             }
 
-            // Chia đôi danh sách cho 2 đội
+            // Chia danh sách hoàn toàn khác nhau cho 2 đội
             const half = Math.floor(words.length / 2);
             team1Queue = words.slice(0, half);
             team2Queue = words.slice(half);
 
-            currentTeam = 1;
-            currentQueue = [...team1Queue]; // Đội 1 chơi trước
+            currentQueue = [...team1Queue];
+            timeLeft = totalTimeInput;
             
             switchScreen('setup-screen', 'ready-screen');
         }
 
-        // 2. Bắt đầu vòng chơi
         function startRound() {
-            // Yêu cầu quyền truy cập cảm biến trên iOS 13+
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 DeviceOrientationEvent.requestPermission()
                     .then(permissionState => {
                         if (permissionState === 'granted') {
                             window.addEventListener('deviceorientation', handleOrientation);
                         }
-                    })
-                    .catch(console.error);
+                    });
             } else {
                 window.addEventListener('deviceorientation', handleOrientation);
             }
 
-            timeLeft = totalTime;
             isPlaying = true;
             document.getElementById('team-indicator').innerText = `Đội ${currentTeam}`;
             document.getElementById('timer').innerText = timeLeft;
-            
             switchScreen('ready-screen', 'play-screen');
             updateWordDisplay();
 
             timerInterval = setInterval(() => {
                 timeLeft--;
                 document.getElementById('timer').innerText = timeLeft;
-                if (timeLeft <= 0) {
-                    endRound();
-                }
+                if (timeLeft <= 0) endRound();
             }, 1000);
         }
 
-        // 3. Xử lý cảm biến nghiêng (Lắc)
         function handleOrientation(event) {
             if (!isPlaying || actionCooldown) return;
-
-            // event.gamma theo dõi góc nghiêng trái/phải khi cầm điện thoại dọc
             const tiltX = event.gamma; 
-            const threshold = 40; // Độ nhạy: Nghiêng 40 độ để kích hoạt
-
-            if (tiltX > threshold) {
-                handleAction('correct');
-            } else if (tiltX < -threshold) {
-                handleAction('skip');
-            }
+            if (tiltX > 45) handleAction('correct');
+            else if (tiltX < -45) handleAction('skip');
         }
 
-        // 4. Xử lý logic Đúng / Bỏ qua
         function handleAction(type) {
             if (!isPlaying || actionCooldown || currentQueue.length === 0) return;
             
@@ -159,17 +140,16 @@
 
             if (type === 'correct') {
                 scores[currentTeam]++;
-                currentQueue.shift(); // Lấy từ đó ra khỏi mảng luôn
-                playScreen.style.backgroundColor = '#2ecc71'; // Chớp màu xanh lá
-            } else if (type === 'skip') {
+                currentQueue.shift();
+                playScreen.style.backgroundColor = '#2ecc71';
+            } else {
                 const skippedWord = currentQueue.shift();
-                currentQueue.push(skippedWord); // Đẩy từ bị skip xuống cuối hàng đợi
-                playScreen.style.backgroundColor = '#e74c3c'; // Chớp màu đỏ
+                currentQueue.push(skippedWord);
+                playScreen.style.backgroundColor = '#e74c3c';
             }
 
-            // Đợi 0.8 giây để người chơi đưa điện thoại về trạng thái cân bằng
             setTimeout(() => {
-                playScreen.style.backgroundColor = '#2c3e50'; // Trả về màu nền cũ
+                playScreen.style.backgroundColor = '#2c3e50';
                 updateWordDisplay();
                 actionCooldown = false;
             }, 800);
@@ -177,51 +157,39 @@
 
         function updateWordDisplay() {
             if (currentQueue.length === 0) {
-                document.getElementById('word-display').innerText = "Hết Từ!";
-                setTimeout(endRound, 1000);
+                document.getElementById('word-display').innerText = "Hết từ!";
+                setTimeout(endRound, 500);
                 return;
             }
             document.getElementById('word-display').innerText = currentQueue[0];
         }
 
-        // 5. Kết thúc vòng
         function endRound() {
             isPlaying = false;
             clearInterval(timerInterval);
-            window.removeEventListener('deviceorientation', handleOrientation); // Tắt cảm biến
+            window.removeEventListener('deviceorientation', handleOrientation);
             
             document.getElementById('result-score').innerText = `Điểm Đội ${currentTeam}: ${scores[currentTeam]}`;
             
             if (currentTeam === 1) {
                 document.getElementById('next-round-btn').style.display = 'inline-block';
-                document.getElementById('restart-btn').style.display = 'none';
             } else {
-                // Đội 2 đã chơi xong -> Hiển thị kết quả chung cuộc
-                document.getElementById('result-title').innerText = "KẾT THÚC!";
-                const finalScore = `Đội 1: ${scores[1]} điểm<br>Đội 2: ${scores[2]} điểm`;
-                
-                let winnerText = "";
-                if (scores[1] > scores[2]) winnerText = "🏆 Đội 1 Thắng!";
-                else if (scores[2] > scores[1]) winnerText = "🏆 Đội 2 Thắng!";
-                else winnerText = "🤝 Hòa Nhau!";
-                
-                document.getElementById('result-score').innerHTML = `${finalScore}<br><br>${winnerText}`;
+                document.getElementById('result-title').innerText = "KẾT QUẢ CHUNG CUỘC";
+                document.getElementById('result-score').innerHTML = `Đội 1: ${scores[1]} | Đội 2: ${scores[2]}<br><br>${scores[1] > scores[2] ? "🏆 Đội 1 Thắng!" : scores[2] > scores[1] ? "🏆 Đội 2 Thắng!" : "🤝 Hòa!"}`;
                 document.getElementById('next-round-btn').style.display = 'none';
                 document.getElementById('restart-btn').style.display = 'inline-block';
             }
-            
             switchScreen('play-screen', 'result-screen');
         }
 
-        // 6. Chuyển sang lượt Đội 2
         function prepareTeam2() {
             currentTeam = 2;
             currentQueue = [...team2Queue];
+            timeLeft = parseInt(document.getElementById('time-input').value) || 60;
             document.getElementById('ready-team-name').innerText = "Đội 2 Chuẩn Bị!";
             switchScreen('result-screen', 'ready-screen');
         }
 
-        // Hàm tiện ích chuyển đổi màn hình
         function switchScreen(hideId, showId) {
             document.getElementById(hideId).classList.remove('active');
             document.getElementById(showId).classList.add('active');
