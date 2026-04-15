@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Charades Class App (Sheets Version)</title>
+    <title>Charades Class App (Button Only)</title>
     <style>
         body {
             margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -20,7 +20,10 @@
         #word-display { font-size: 4rem; font-weight: bold; margin: 40px 0; padding: 0 10px; }
         #timer { font-size: 2rem; position: absolute; top: 20px; right: 20px; font-weight: bold; }
         #team-indicator { position: absolute; top: 20px; left: 20px; font-size: 1.2rem; opacity: 0.8; }
-        .controls { display: flex; gap: 20px; position: absolute; bottom: 40px; }
+        
+        /* Chỉnh lại khu vực nút bấm cho to và dễ thao tác hơn */
+        .controls { display: flex; gap: 20px; position: absolute; bottom: 40px; width: 100%; justify-content: center; padding: 0 20px; box-sizing: border-box; }
+        .controls button { flex: 1; max-width: 200px; padding: 20px; font-size: 1.5rem; }
         .btn-skip { background-color: #e74c3c; }
         .btn-correct { background-color: #2ecc71; }
     </style>
@@ -39,7 +42,7 @@
 
     <div id="ready-screen" class="screen">
         <h1 id="ready-team-name">Đội 1 Chuẩn Bị!</h1>
-        <p>Nghiêng Phải = Đúng | Nghiêng Trái = Skip</p>
+        <p>Sử dụng nút bấm trên màn hình để chọn Đúng hoặc Skip</p>
         <button onclick="startRound()">Sẵn Sàng Chơi</button>
     </div>
 
@@ -48,8 +51,8 @@
         <div id="timer">60</div>
         <div id="word-display">Đang tải...</div>
         <div class="controls">
-            <button class="btn-skip" onclick="handleAction('skip')">Skip (Trái)</button>
-            <button class="btn-correct" onclick="handleAction('correct')">Đúng (Phải)</button>
+            <button class="btn-skip" onclick="handleAction('skip')">Skip ❌</button>
+            <button class="btn-correct" onclick="handleAction('correct')">Đúng ✅</button>
         </div>
     </div>
 
@@ -75,7 +78,7 @@
             const rawText = document.getElementById('word-input').value;
             const totalTimeInput = parseInt(document.getElementById('time-input').value) || 60;
             
-            // Tách theo dòng mới (\n), dọn dẹp khoảng trắng, và loại bỏ từ trùng lặp (Set)
+            // Tách theo dòng mới (\n), dọn dẹp khoảng trắng, và loại bỏ từ trùng lặp
             let words = Array.from(new Set(rawText.split(/\r?\n/).map(w => w.trim()))).filter(w => w.length > 0);
             
             if (words.length < 2) {
@@ -101,17 +104,6 @@
         }
 
         function startRound() {
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(permissionState => {
-                        if (permissionState === 'granted') {
-                            window.addEventListener('deviceorientation', handleOrientation);
-                        }
-                    });
-            } else {
-                window.addEventListener('deviceorientation', handleOrientation);
-            }
-
             isPlaying = true;
             document.getElementById('team-indicator').innerText = `Đội ${currentTeam}`;
             document.getElementById('timer').innerText = timeLeft;
@@ -123,13 +115,6 @@
                 document.getElementById('timer').innerText = timeLeft;
                 if (timeLeft <= 0) endRound();
             }, 1000);
-        }
-
-        function handleOrientation(event) {
-            if (!isPlaying || actionCooldown) return;
-            const tiltX = event.gamma; 
-            if (tiltX > 45) handleAction('correct');
-            else if (tiltX < -45) handleAction('skip');
         }
 
         function handleAction(type) {
@@ -148,11 +133,12 @@
                 playScreen.style.backgroundColor = '#e74c3c';
             }
 
+            // Độ trễ ngắn để người chơi thấy phản hồi màu sắc
             setTimeout(() => {
                 playScreen.style.backgroundColor = '#2c3e50';
                 updateWordDisplay();
                 actionCooldown = false;
-            }, 800);
+            }, 400); // Đã giảm thời gian chờ xuống 0.4s cho cảm giác bấm nhanh hơn
         }
 
         function updateWordDisplay() {
@@ -167,7 +153,6 @@
         function endRound() {
             isPlaying = false;
             clearInterval(timerInterval);
-            window.removeEventListener('deviceorientation', handleOrientation);
             
             document.getElementById('result-score').innerText = `Điểm Đội ${currentTeam}: ${scores[currentTeam]}`;
             
